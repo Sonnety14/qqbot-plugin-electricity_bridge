@@ -59,6 +59,15 @@ def test_assistant_fixed_upload_route(tmp_path):
     p=tmp_path/'config.json';p.write_text(json.dumps({'website_origin':'https://test.example'}))
     assert assistant_config.load_upload_url(p)=='https://test.example/tools/campus/electric/upload'
 
+def test_assistant_saves_only_origin_and_rejects_invalid_change(tmp_path):
+    path=tmp_path/'config.json'
+    assistant_config.save_origin(' https://test.example/ ',path)
+    assert json.loads(path.read_text())=={'website_origin':'https://test.example'}
+    before=path.read_bytes()
+    for bad in ['http://test.example','https://test.example:bad','https://test.example/account/']:
+        with pytest.raises(ValueError):assistant_config.save_origin(bad,path)
+    assert path.read_bytes()==before
+
 def test_independent_router_full_staging_and_renewal(tmp_path):
     import hashlib,hmac
     from integration.router import build_electric_router

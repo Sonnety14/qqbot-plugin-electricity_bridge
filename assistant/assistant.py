@@ -11,7 +11,7 @@ import tempfile
 import threading
 
 HOST = 'wx.cdzht.com'
-from configuration import load_upload_url
+from configuration import load_upload_url, save_origin
 
 
 def capture():
@@ -86,14 +86,19 @@ ForEach-Object {(Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue)
     asyncio.run(run())
 
 
-def gui():
+def gui(smoke_test=False):
     import ctypes
     handle=ctypes.windll.kernel32.GetConsoleWindow()
-    if handle:ctypes.windll.user32.ShowWindow(handle,0)
+    if handle and not smoke_test:ctypes.windll.user32.ShowWindow(handle,0)
     import tkinter as tk
     from tkinter import ttk
-    window=tk.Tk();window.title('电费连接助手');window.geometry('510x260');window.resizable(False,False)
+    window=tk.Tk();window.title('电费连接助手');window.geometry('530x350');window.resizable(False,False)
+    if smoke_test:window.withdraw()
     frame=ttk.Frame(window,padding=24);frame.pack(fill='both',expand=True)
+    ttk.Label(frame,text='提供连接码的网站地址（HTTPS）').pack(anchor='w')
+    website=ttk.Entry(frame,width=65);website.pack(fill='x',pady=(8,12))
+    try:website.insert(0,load_upload_url().removesuffix('/tools/campus/electric/upload'))
+    except Exception:pass
     ttk.Label(frame,text='粘贴网站生成的连接码').pack(anchor='w')
     code=ttk.Entry(frame,width=65);code.pack(fill='x',pady=(8,14))
     status=tk.StringVar(value='连接后，在微信打开电费余额页。')
@@ -116,11 +121,12 @@ def gui():
         if window.winfo_exists():status.set(message)
     def start():
         nonlocal process
-        try:load_upload_url()
-        except Exception:status.set('助手尚未配置可信网站，请联系提供方。');return
         value=code.get().strip()
         if not re.fullmatch(r'ELECTRIC-[A-Za-z0-9_-]{43}',value):status.set('请复制完整的 ELECTRIC- 开头连接码。');return
         if process and process.poll() is None:return
+        try:save_origin(website.get())
+        except ValueError:status.set('请输入可信的 HTTPS 网站根地址，不要填写账号页路径。');return
+        except OSError:status.set('无法保存网站地址，请先解压到可写文件夹，再打开助手。');return
         start_button.config(state='disabled');status.set('正在准备连接…');code.delete(0,'end')
         args=[sys.executable,'--capture'] if getattr(sys,'frozen',False) else [sys.executable,str(Path(__file__).resolve()),'--capture']
         process=subprocess.Popen(args,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,text=True,encoding='utf8',creationflags=0x08000000)
@@ -140,7 +146,11 @@ def gui():
     start_button=ttk.Button(buttons,text='开始连接',command=start);start_button.pack(side='left')
     def close():stop();window.destroy()
     ttk.Button(buttons,text='关闭',command=close).pack(side='right')
-    window.protocol('WM_DELETE_WINDOW',close);window.mainloop()
+    window.protocol('WM_DELETE_WINDOW',close)
+    if smoke_test:
+        window.update_idletasks();assert website.winfo_exists() and code.winfo_exists()
+        window.destroy();print('PASS packaged GUI without starting capture',flush=True);return
+    window.mainloop()
 
 
 if __name__=='__main__':
@@ -150,6 +160,8 @@ if __name__=='__main__':
         import mitmproxy_windows, tkinter, httpx
         opts=options.Options(mode=['local:WeChatAppEx.exe'],allow_hosts=[r'^wx\.cdzht\.com$'])
         print('PASS packaged imports and options',flush=True)
+    elif '--self-test-gui' in sys.argv:
+        gui(smoke_test=True)
     elif '--capture' in sys.argv:
         try:capture()
         except Exception:print(json.dumps({'state':'error'}),flush=True)

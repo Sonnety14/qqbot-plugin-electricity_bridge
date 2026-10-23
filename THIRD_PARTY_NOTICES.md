@@ -1,9 +1,9 @@
-# 第三方组件说明（待发布审核）
+# 第三方组件说明
 
-本目录只保存项目源码和依赖声明，没有打包第三方二进制。源码许可证尚待拥有者选择；没有擅自指定 MIT/GPL 等许可证。
+Windows 下载包包含 licenses/ 和 DEPENDENCIES.json，保留第三方组件原始许可证与版本清单。项目自身源码尚未指定开源许可证，第三方许可证不受影响。
 
-使用或构建时涉及 Python、AstrBot、mitmproxy / mitmproxy_rs / Windows 重定向组件、WinDivert、httpx、Tk、PyInstaller；可选网站接口涉及 FastAPI 和 cryptography。它们分别适用自身许可证，不因本项目而改变。
+本次构建使用 Python 3.12.8、mitmproxy 12.3.0、mitmproxy_rs / mitmproxy-windows 0.12.15、pydivert 3.1.3、httpx 0.28.1、PyInstaller 6.22.3，以及 Tk 和相关运行依赖。可选网站后端和机器人插件依赖不等于全部进入助手运行包；DEPENDENCIES.json 记录的是构建环境版本。
 
-公开二进制前，应从实际固定版本的发行包收集 LICENSE / COPYING / NOTICE，检查 Windows 驱动及间接依赖的再分发要求、源码提供义务和 PyInstaller 相关条款。不能用本文件代替上游完整许可证，也不能把安装包内复制了 license 文件等同于完成合规审核。
+Windows 重定向组件、WinDivert 和 pydivert 涉及 LGPL 许可。Release 同时提供对应的 mitmproxy_rs v0.12.15、WinDivert v2.2.2、pydivert v3.1.3 源码，Rust Cargo.lock 锁定的依赖源码，以及 Python 依赖源文件和重建说明。原组件未修改。程序不限制替换这些组件，或为调试其修改而进行的逆向工程。重定向 EXE 和 WinDivert DLL/驱动保持独立文件，Python 部分可从源码重新打包。
 
-本项目未宣称是电费运营方、微信或 AstrBot 的官方产品。
+完整许可文本以下载包 licenses/ 和上游源码中的 LICENSE/COPYING/NOTICE 为准。本说明不替代原始条款。本项目不是电费运营方、微信或 AstrBot 的官方产品。

@@ -2,9 +2,9 @@
 
 通过用户自己的微信电费会话读取余额，使用 AstrBot 发送每日低余额 QQ 提醒。Windows 助手用于把正常登录后的电费会话交给用户信任的网站，减少手工抓包步骤。
 
-本项目提供 AstrBot 电费提醒插件、Windows 连接助手和网站绑定接口。当前支持一个配置的 QQ 和一份电费会话，适合个人或单房间部署。仓库只包含源码、配置示例和测试，不包含真实账号、会话或预配置的可执行文件。
+本项目提供 AstrBot 电费提醒插件、Windows 连接助手和网站绑定接口。当前支持一个配置的 QQ 和一份电费会话，适合个人或单房间部署。源码仓库包含代码、配置示例和测试；Windows 免安装助手可从 [Releases](https://github.com/Sonnety14/qqbot-plugin-electricity_bridge/releases) 下载。下载包不含真实账号、会话或预配置的网站地址。
 
-关联线上版本已完成用户实际操作的首次绑定、网站确认、模拟授权失效后的更新恢复和 QQ 状态查询。本仓库的配置拆分版本通过 17 项离线测试；部署到新环境后仍需进行端到端验证。运营方自然会话过期时间尚未确定。
+关联线上版本已完成用户实际操作的首次绑定、网站确认、模拟授权失效后的更新恢复和 QQ 状态查询。本仓库的配置拆分版本通过 18 项离线测试；部署到新环境后仍需进行端到端验证。运营方自然会话过期时间尚未确定。
 
 ## 项目包含什么
 
@@ -24,12 +24,12 @@ docs/                             网站适配、发布前检查记录
 
 ## 普通用户：通过助手绑定
 
-需要网站运营者事先完成网站接口接入，并提供已经配置可信上传网站的助手。
+需要网站运营者事先完成网站接口接入并开放账号绑定权限。通用助手首次使用可直接填写可信网站的 HTTPS 根地址，无需编辑文件。下载和运行步骤见 [Windows 使用说明](docs/WINDOWS_GUIDE.md)。
 
 1. 登录提供方网站，绑定本人 QQ，进入“绑定电费”。
 2. 下载并解压助手，保留整个程序文件夹。
 3. 网站生成连接码，复制 `ELECTRIC-` 开头的完整字符。
-4. 打开助手，粘贴连接码，点击“开始连接”。
+4. 打开助手，填写提供连接码的网站 HTTPS 根地址，粘贴连接码，点击“开始连接”。
 5. 显示已准备好后，在 Windows 微信进入本人已绑定房间的电费余额页并刷新。
 6. 助手提示已连接后，回网站确认房间、余额和数据更新时间，点击“确认绑定”。
 7. 完成后关闭助手。服务器负责后续每天查询，不需要一直开着助手。
@@ -134,7 +134,7 @@ $electricPattern = '^(?:' + (($electricTargets | ForEach-Object { [regex]::Escap
 
 ## 配置和构建助手
 
-部署者将 `assistant/config.example.json` 复制为 `assistant/config.json`，把 `website_origin` 改为自己已经接好接口的可信 HTTPS 站点。默认 `example.invalid` 会被拒绝，防止未经配置就上传会话。普通用户不需要配置代理或填写网址。
+用户可在助手界面填写可信的 HTTPS 网站根地址，程序仅保存此地址。部署者也可将 `assistant/config.example.json` 复制为 `assistant/config.json` 并填写 `website_origin`。默认 `example.invalid` 会被拒绝；连接码不能改变上传目的地，用户不需要配置代理。
 
 ```powershell
 .\.venv\Scripts\python.exe assistant/assistant.py
@@ -143,9 +143,9 @@ $electricPattern = '^(?:' + (($electricTargets | ForEach-Object { [regex]::Escap
 .\scripts\build_assistant.ps1
 ```
 
-构建产物在 `dist/ElectricityAssistant/`。将部署者配置好的 `config.json` 放在 EXE 同级再分发，保留 `_internal`。构建脚本刻意不自动复制真实配置。连接码永远不能改变上传地址。更新过网址的包应由提供方重新检查和分发，不让用户从不可信来源获取配置。
+构建产物在 `dist/ElectricityAssistant/`。保留 `_internal`。可以不带 `config.json` 分发，由用户首次填写网站；也可由运营者预配置可信网站。构建脚本刻意不自动复制真实配置。连接码永远不能改变上传地址。更新过网址的包应由提供方重新检查和分发，不让用户从不可信来源获取配置。
 
-本次整理没有重新分发二进制，之前其他私有项目中的 EXE 不属于本仓库的构建产物。
+官方 Releases 提供本独立项目构建的通用 Windows x64 包、使用说明、SHA256 清单及第三方源码材料；不包含个人部署配置。
 
 ## 测试与待验收
 
@@ -155,7 +155,7 @@ py -3.12 -m venv .venv-test
 .\.venv-test\Scripts\python.exe -m pytest tests -q
 ```
 
-本次独立目录的 17 项离线测试通过，包含用最小 AstrBot API 替身验证的插件逻辑；详细结果见 [验证记录](docs/VALIDATION.md)。离线测试不抓包、不发送 QQ、不访问真实电费服务。直接在真实 AstrBot 环境运行的回归入口是 `tests/check_astrbot_runtime.py`，需要已安装 AstrBot。
+本次独立目录的 18 项离线测试通过，包含用最小 AstrBot API 替身验证的插件逻辑；详细结果见 [验证记录](docs/VALIDATION.md)。离线测试不抓包、不发送 QQ、不访问真实电费服务。直接在真实 AstrBot 环境运行的回归入口是 `tests/check_astrbot_runtime.py`，需要已安装 AstrBot。
 
 部署后建议依次验证首次绑定、房间确认、QQ 状态和受控失效恢复；跨 Windows 环境及自然会话过期仍需观察。模拟失效成功不代表已验证自然过期。后续事项见 [维护清单](docs/RELEASE_CHECKLIST.md)。
 
@@ -165,4 +165,4 @@ py -3.12 -m venv .venv-test
 
 项目仓库：[Sonnety14/qqbot-plugin-electricity_bridge](https://github.com/Sonnety14/qqbot-plugin-electricity_bridge)。
 
-目前仅发布源码，不提供已配置站点或打包第三方组件的二进制。源码尚未指定开源许可证，公开可见不代表授予额外使用或再分发许可。第三方依赖适用各自许可证，见 [第三方说明](THIRD_PARTY_NOTICES.md)。
+Windows Release 附带运行依赖、第三方许可声明和对应源码材料，不预置站点或账号。源码尚未指定开源许可证，公开可见不代表授予额外使用或再分发许可。第三方依赖适用各自许可证，见 [第三方说明](THIRD_PARTY_NOTICES.md)。

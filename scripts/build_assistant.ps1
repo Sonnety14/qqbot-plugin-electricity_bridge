@@ -7,5 +7,7 @@ try {
     Copy-Item -LiteralPath assistant/config.example.json -Destination dist/ElectricityAssistant/config.example.json
     & dist/ElectricityAssistant/ElectricityAssistant.exe --self-test
     if($LASTEXITCODE -ne 0){throw 'Packaged self-test failed'}
-    Write-Output 'Configure a trusted website in config.json beside the executable before distributing. Do not include credentials.'
+    & dist/ElectricityAssistant/ElectricityAssistant.exe --self-test-gui
+    if($LASTEXITCODE -ne 0){throw 'Packaged GUI self-test failed'}
+    Write-Output 'Users can enter their trusted website on first launch. Do not package runtime config or credentials.'
 } finally {Pop-Location}
