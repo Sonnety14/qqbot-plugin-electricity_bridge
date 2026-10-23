@@ -10,7 +10,7 @@
     "default": ""
   },
   "qq": {
-    "description": "接收提醒的 QQ",
+    "description": "旧版迁移 QQ（新用户无需配置）",
     "type": "string",
     "default": ""
   },

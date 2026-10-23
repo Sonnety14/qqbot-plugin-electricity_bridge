@@ -1,4 +1,4 @@
-"""Pilot electricity binding: short-lived tickets, encrypted staging, explicit confirmation."""
+"""Multi-user electricity binding: short-lived tickets, encrypted staging, explicit confirmation."""
 import base64
 import hashlib
 import hmac
@@ -59,7 +59,7 @@ def build_electric_router(identity, origin, store, bridge_token, pilot_qq, sessi
 
     def allowed(db, uid):
         row = db.execute('SELECT qq FROM campus_qq_bindings WHERE user_id=?', (uid,)).fetchone()
-        return bool(row and row['qq'] == pilot_qq)
+        return row['qq'] if row else None
 
     def internal(request):
         if not secrets.compare_digest(request.headers.get('authorization', ''), 'Bearer ' + bridge): raise HTTPException(401)
@@ -75,7 +75,7 @@ def build_electric_router(identity, origin, store, bridge_token, pilot_qq, sessi
         s = session(request)
         with connect(identity.db) as db:
             clean(db)
-            enabled = allowed(db, s['id'])
+            enabled = bool(allowed(db, s['id']))
             job = db.execute('SELECT * FROM electric_jobs WHERE user_id=?', (s['id'],)).fetchone()
             binding = db.execute('SELECT state,snapshot,updated FROM electric_bindings WHERE user_id=?', (s['id'],)).fetchone()
             j = {'state':job['state'], 'id':job['id'], 'snapshot':json.loads(job['snapshot']) if job['snapshot'] else None} if valid_job(db, job) else None
@@ -85,7 +85,7 @@ def build_electric_router(identity, origin, store, bridge_token, pilot_qq, sessi
     def download(request: Request):
         s = session(request)
         with connect(identity.db) as db:
-            if not allowed(db, s['id']): raise HTTPException(403, '暂未开放')
+            if not allowed(db, s['id']): raise HTTPException(403, '请先绑定 QQ')
         p = Path(identity.db).parent / 'campus-media' / 'electric-assistant.zip'
         if not p.is_file(): raise HTTPException(503, '助手正在准备')
         return FileResponse(p, filename='Electricity-Assistant.zip', media_type='application/zip')
@@ -98,11 +98,11 @@ def build_electric_router(identity, origin, store, bridge_token, pilot_qq, sessi
         with connect(identity.db) as db:
             db.execute('BEGIN IMMEDIATE')
             clean(db)
-            if not allowed(db, s['id']): raise HTTPException(403, '请先绑定 QQ；电费功能目前试用中')
+            if not allowed(db, s['id']): raise HTTPException(403, '请先绑定 QQ')
             old = db.execute('SELECT state FROM electric_jobs WHERE user_id=?', (s['id'],)).fetchone()
             if old and old['state'] in ('queued','processing'): raise HTTPException(409, '正在保存，请稍候')
             db.execute('''INSERT OR REPLACE INTO electric_jobs(user_id,id,token_hash,auth_version,qq,expires,state)
-              VALUES(?,?,?,?,?,?,'waiting')''', (s['id'], secrets.token_hex(16), digest(token), s['user_auth_version'], pilot_qq, time.time()+600))
+              VALUES(?,?,?,?,?,?,'waiting')''', (s['id'], secrets.token_hex(16), digest(token), s['user_auth_version'], allowed(db, s['id']), time.time()+600))
         return {'code':'ELECTRIC-' + token, 'expires_in':600}
 
     @router.post(P + '/upload')
@@ -144,11 +144,14 @@ def build_electric_router(identity, origin, store, bridge_token, pilot_qq, sessi
             db.execute('BEGIN IMMEDIATE')
             clean(db)
             job = db.execute("SELECT * FROM electric_jobs WHERE state IN ('validating','queued','processing') AND lease_until<? ORDER BY expires LIMIT 1", (time.time(),)).fetchone()
-            if not valid_job(db,job): return {'item':None}
+            while job and not valid_job(db,job):
+                db.execute("UPDATE electric_jobs SET state='expired',payload=NULL,token_hash='' WHERE id=?",(job['id'],))
+                job = db.execute("SELECT * FROM electric_jobs WHERE state IN ('validating','queued','processing') AND lease_until<? ORDER BY expires LIMIT 1", (time.time(),)).fetchone()
+            if not job: return {'item':None}
             lease = secrets.token_hex(16)
             action = 'validate' if job['state']=='validating' else 'install'
             db.execute('UPDATE electric_jobs SET lease=?,lease_until=? WHERE id=?', (lease,time.time()+60,job['id']))
-            return {'item':{'id':job['id'],'lease':lease,'action':action,'qq':job['qq'],'credentials':json.loads(cipher.decrypt(job['payload'].encode()))}}
+            return {'item':{'user_id':job['user_id'],'id':job['id'],'lease':lease,'action':action,'qq':job['qq'],'credentials':json.loads(cipher.decrypt(job['payload'].encode()))}}
 
     @router.post(B + '/result')
     async def result(request: Request):
@@ -161,13 +164,24 @@ def build_electric_router(identity, origin, store, bridge_token, pilot_qq, sessi
         with connect(identity.db) as db:
             db.execute('BEGIN IMMEDIATE')
             job=db.execute('SELECT * FROM electric_jobs WHERE id=? AND lease=?',(data.get('id'),data.get('lease'))).fetchone()
-            if not valid_job(db,job): raise HTTPException(409)
+            if not valid_job(db,job) or job['lease_until'] <= time.time(): raise HTTPException(409)
             if (state=='ready' and job['state']!='validating') or (state=='done' and job['state'] not in ('queued','processing')): raise HTTPException(409)
             encoded=json.dumps(snapshot,ensure_ascii=False) if snapshot else None
             db.execute('UPDATE electric_jobs SET state=?,snapshot=?,payload=CASE WHEN ? THEN NULL ELSE payload END,lease=NULL,lease_until=0 WHERE id=?', (state,encoded,state in ('done','failed'),job['id']))
             if state=='done':
                 db.execute('INSERT OR REPLACE INTO electric_bindings VALUES(?,?,?,?,?,?)',(job['user_id'],job['qq'],job['id'],'active',encoded,time.time()))
         return {'ok':True}
+
+    @router.post(B + '/bindings')
+    def bindings(request: Request):
+        internal(request)
+        with connect(identity.db) as db:
+            rows=db.execute('''SELECT b.* FROM electric_bindings b
+              JOIN users u ON u.id=b.user_id
+              JOIN email_credentials e ON e.user_id=u.id
+              JOIN campus_qq_bindings q ON q.user_id=u.id AND q.qq=b.qq
+              WHERE u.status='active' AND e.verified_at IS NOT NULL''').fetchall()
+        return {'items':[dict(r, snapshot=json.loads(r['snapshot'])) for r in rows]}
 
     @router.post(B + '/health')
     async def health(request: Request):

@@ -24,3 +24,4 @@ def test_plugin_scheduler_and_renewal_offline(monkeypatch):
     root=Path(__file__).resolve().parents[1]
     monkeypatch.syspath_prepend(str(root/'plugin'))
     runpy.run_path(str(root/'tests/check_astrbot_runtime.py'),run_name='__main__')
+    runpy.run_path(str(root/'tests/check_multi_runtime.py'),run_name='__main__')

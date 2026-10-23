@@ -3,7 +3,7 @@ from pathlib import Path
 import zipfile
 
 ROOT=Path(__file__).resolve().parents[1]
-FILES=('main.py','provider.py','configuration.py','metadata.yaml','_conf_schema.json','requirements.txt')
+FILES=('main.py','worker.py','provider.py','configuration.py','metadata.yaml','_conf_schema.json','requirements.txt')
 
 def main():
     output=ROOT/'dist';output.mkdir(exist_ok=True)

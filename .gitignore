@@ -33,3 +33,8 @@ dist/
 *.spec
 *.exe
 *.zip
+
+# Multi-user encrypted runtime data
+accounts/
+*.enc
+multi-migration-manifest.json

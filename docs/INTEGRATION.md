@@ -9,7 +9,7 @@ app.include_router(build_electric_router(
     origin="https://your-site.example",
     store=rate_limit_adapter,
     bridge_token=server_master_secret,
-    pilot_qq=configured_pilot_qq,
+    pilot_qq="",  # 兼容旧调用签名；不再限制账号
 ))
 ```
 
@@ -21,10 +21,10 @@ app.include_router(build_electric_router(
 - `identity.load_session(cookie_value)`：无效、撤销或过期会话返回 None；有效会话返回 `id`、`verified_at`、`csrf`、`user_auth_version`。宿主必须实际验证 cookie，不得直接信任请求中的用户 ID。
 - `store.limit(key, limit)`：线程安全的限流；在宿主规定的短时间窗口内返回是否允许。本模块以此限制连接码创建，宿主还须配置全局/IP 限流。
 - 默认会话 Cookie 为 `__Host-site_session`，可用 `session_cookie` 参数指定；应使用 Secure、HttpOnly、Path=/ 等正确配置。
-- 数据库已有 `users(id,auth_version,status)`、`email_credentials(user_id,verified_at)` 和 `campus_qq_bindings(user_id,qq)`。这里保留历史表名及路由名兼容协议，不代表依赖校园插件。`status='active'` 表示可用账号；`qq` 必须通过真实验证流程取得。
+- 数据库已有 `users(id,auth_version,status)`、`email_credentials(user_id,verified_at)` 和 `campus_qq_bindings(user_id,qq)`。这里保留历史表名及路由名兼容协议，不代表依赖校园插件。`status='active'` 表示可用账号；`qq` 必须通过真实验证流程取得，并具有 UNIQUE 约束，不能同时归属多个账号。
 - 数据库同级 `campus-media/electric-assistant.zip` 是可选下载产物；应由部署者放置并设置服务账号可读权限。
 
-路由创建 `electric_jobs` 和 `electric_bindings`。它只是单账号试用限制，不是完整多租户系统。
+路由创建 `electric_jobs` 和 `electric_bindings`。两张表均以网站 user_id 隔离任务和绑定；客户端不能自行指定归属用户。
 
 ## 接口
 
@@ -34,9 +34,10 @@ app.include_router(build_electric_router(
 | `/tools/campus/electric/start` | POST，会话 + Origin + CSRF | 签发一次性 `ELECTRIC-` 连接码 |
 | `/tools/campus/electric/upload` | POST，一次性 Bearer | 助手提交 cookie、user_agent、room |
 | `/tools/campus/electric/confirm` | POST，会话 + Origin + CSRF | 本人确认已验证房间；body 为任务 id |
-| `/tools/campus/electric/assistant.zip` | GET，会话 + 试用账号 | 下载助手 |
+| `/tools/campus/electric/assistant.zip` | GET，会话 + 已绑定 QQ | 下载助手 |
 | `/comments/bridge/campus/electric/work` | POST，私网 + scoped Bearer | 机器人取得验证/安装任务 |
 | `/comments/bridge/campus/electric/result` | POST，私网 + scoped Bearer | 携带任务 id 和 lease 回报结果 |
+| `/comments/bridge/campus/electric/bindings` | POST，私网 + scoped Bearer | 当前有效用户/QQ/绑定版本清单，无凭据 |
 | `/comments/bridge/campus/electric/health` | POST，私网 + scoped Bearer | 按绑定版本更新 active/auth/meter 状态 |
 
 所有 JSON 路由由宿主限制请求体大小（建议 16 KiB），设置 no-store；不要记录 Authorization、Cookie、请求体、连接码及会话。关闭能泄露请求字段的诊断日志。公网代理应直接拒绝整个内部 bridge 前缀，不能只靠隐藏路径。
@@ -55,4 +56,8 @@ hmac.new(server_master_secret.encode(), b"campus-bindings-v1", hashlib.sha256).h
 
 任务流程为 waiting → validating → ready → queued → done；失败为 failed，超时为 expired。`processing` 是兼容保留状态。一次性上传使 token 失效；账号授权版本变化后旧任务不可继续。待处理 Cookie 使用由服务器主密钥派生的 Fernet 密钥加密，完成/失败/超时清除。
 
-机器人最终凭据在文件中受访问权限保护，并非数据库加密。现阶段正式查询仍是单账号，插件配置的 QQ 必须与网站试用 QQ 一致，否则拒绝安装任务。不要取消试用限制就宣称支持多人。
+work 返回服务端确定的 user_id、qq 和 id；插件不得从助手上传字段推断接收人。bindings 仅返回账号有效、邮箱验证且 QQ 绑定仍一致的正式绑定。该接口包含房间快照，必须保持仅私网可访问。
+
+机器人将凭据用本机 accounts.key 加密，存入 accounts/<user_id>/<version>.enc，查询库也在对应账号目录。旧文件只有匹配网站正式版本及旧配置 QQ 才迁移。续期先加密暂存，网站 result 确认后依据 bindings 的正式版本启用，失败不覆盖旧版。每个账号独立 HTTP 客户端、锁、暂停状态和按天去重；网站不可用时停止处理，发送前再次核验绑定。
+
+部署顺序：备份网站数据库及机器人完整数据目录；先部署新增 bindings/user_id 协议的路由，再更新机器人。已有 Windows 助手上传协议兼容，无需重新抓取原有用户的会话。
