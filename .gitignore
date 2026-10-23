@@ -1,0 +1,35 @@
+# Runtime secrets / private operator settings
+.env
+.env.*
+!*.example
+config.json
+credentials.json
+credentials.pending
+*.pem
+*.key
+*.p12
+*.pfx
+*.sqlite*
+*.db
+*.db-*
+*.log
+*.har
+*.pcap
+*.pcapng
+*.mitm
+private/
+plugin_data/
+backup*/
+captures/
+
+# Local environments and generated packages
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+build/
+dist/
+*.spec
+*.exe
+*.zip
